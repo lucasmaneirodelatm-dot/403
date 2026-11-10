@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Control de accesos · Administración</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1220;--panel:#121d30;--line:#26364d;--text:#edf3fb;--muted:#9fb0c5;--blue:#38bdf8;--green:#34d399;--red:#fb7185}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1220,#101c31);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}button,input,select{font:inherit}button{cursor:pointer;border:0;border-radius:9px;padding:10px 14px;background:var(--blue);color:#062033;font-weight:700}button.secondary{background:#26364d;color:var(--text)}button.danger{background:#4b2431;color:#ffdce2}input,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#0c1728;color:var(--text)}label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}.wrap{max-width:1300px;margin:auto;padding:28px 18px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}.top h1{font-size:clamp(24px,4vw,34px);margin:0}.muted{color:var(--muted)}.panel{background:rgba(18,29,48,.94);border:1px solid var(--line);border-radius:16px;padding:18px;margin:16px 0;box-shadow:0 14px 38px #0002}.login{max-width:410px;margin:10vh auto}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.stat{padding:17px;background:#0c1728;border:1px solid var(--line);border-radius:13px}.stat strong{display:block;font-size:29px}.stat span{color:var(--muted);font-size:13px}.formgrid{display:grid;grid-template-columns:1fr 1fr 1.5fr 1fr auto;gap:10px;align-items:end}.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:760px}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}th{color:var(--muted);font-weight:600;white-space:nowrap}.pill{display:inline-block;padding:3px 8px;border-radius:99px;background:#173047;color:#a5e5ff;font-size:12px}.pill.green{background:#12382f;color:#9ef0d2}.pill.red{background:#462431;color:#ffc0cc}.rowtools{display:flex;gap:7px;align-items:center}.hidden{display:none!important}.error{color:#ff9eae;margin:10px 0}.success{color:#8ef0c7;margin:10px 0}.sectionhead{display:flex;justify-content:space-between;align-items:center;gap:12px}.sectionhead h2{font-size:18px;margin:0 0 12px}.foot{font-size:12px;color:var(--muted);margin-top:26px}a{color:#7dd3fc}.help{font-size:12px;color:var(--muted);margin-top:7px}@media(max-width:850px){.formgrid{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.wrap{padding:18px 12px 40px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section id="login" class="panel login">
+      <h1>🔐 Control de accesos</h1>
+      <p class="muted">Panel privado de administración</p>
+      <form id="loginForm"><label for="password">Contraseña de administrador</label><input id="password" type="password" autocomplete="current-password" required><p id="loginError" class="error"></p><button type="submit" style="width:100%">Entrar</button></form>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <header class="top"><div><h1>Control de accesos</h1><div class="muted">Historial centralizado de tus videojuegos y páginas</div></div><div class="rowtools"><a href="/privacidad.html" target="_blank">Aviso de privacidad</a><button id="logout" class="secondary">Cerrar sesión</button></div></header>
+      <div class="grid">
+        <div class="stat"><strong id="today">0</strong><span>Entradas hoy</span></div>
+        <div class="stat"><strong id="total">0</strong><span>Entradas registradas</span></div>
+        <div class="stat"><strong id="visitorCount">0</strong><span>Dispositivos con consentimiento</span></div>
+      </div>
+
+      <section class="panel">
+        <div class="sectionhead"><h2>Webs y videojuegos</h2><span class="muted">Configura el comportamiento de cada destino</span></div>
+        <form id="siteForm" class="formgrid">
+          <div><label for="slug">Identificador</label><input id="slug" placeholder="vitrasachase" pattern="[a-z0-9-]+" required></div>
+          <div><label for="name">Nombre</label><input id="name" placeholder="Vitrasa Chase" required></div>
+          <div><label for="target">URL original HTTPS</label><input id="target" type="url" placeholder="https://..." required></div>
+          <div><label for="mode">Funcionamiento</label><select id="mode"><option value="protected">Protegido (Cloudflare)</option><option value="redirect">Solo registrar y redirigir</option></select></div>
+          <button type="submit">Guardar</button>
+        </form>
+        <div class="help">Protegido: coloca los archivos del sitio en <code>public/sitio/IDENTIFICADOR/</code>. Redirección: envía a la URL registrada. El parámetro ?web= solo acepta destinos que hayas registrado aquí.</div>
+        <div id="siteMessage"></div>
+        <div class="tablewrap"><table><thead><tr><th>Sitio</th><th>Modo</th><th>Estado</th><th>Enlace de entrada</th></tr></thead><tbody id="sites"></tbody></table></div>
+      </section>
+
+      <section class="panel">
+        <div class="sectionhead"><h2>Últimas entradas</h2><button id="refresh" class="secondary">Actualizar</button></div>
+        <div class="tablewrap"><table><thead><tr><th>Fecha y hora</th><th>Visitante</th><th>Destino</th><th>Dispositivo</th><th>Ubicación aprox.</th><th>Salida</th></tr></thead><tbody id="recent"></tbody></table></div>
+      </section>
+
+      <section class="panel">
+        <h2>Dispositivos reconocidos</h2>
+        <p class="muted">El identificador se guarda solo si el visitante acepta el seguimiento. No equivale a conocer su identidad real.</p>
+        <div class="tablewrap"><table><thead><tr><th>Dispositivo</th><th>Navegador / SO</th><th>Última visita</th><th>Visitas</th><th>Ubicación</th><th>Nombre interno</th></tr></thead><tbody id="visitors"></tbody></table></div>
+      </section>
+      <p class="foot">Los registros sin consentimiento aparecen como “Anónimo”. La ubicación es aproximada. No se almacena la IP original; se guarda un HMAC de la IP solo para dispositivos que aceptan.</p>
+    </section>
+  </main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const date=s=>s?new Date(s).toLocaleString('es-ES'):'—';
+async function api(path,options={}){const r=await fetch(path,{credentials:'same-origin',headers:{'content-type':'application/json',...(options.headers||{})},...options});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||`Error HTTP ${r.status}`);return d}
+function showDashboard(){ $('login').classList.add('hidden');$('dashboard').classList.remove('hidden');load(); }
+async function load(){try{const d=await api('/api/admin/data');$('today').textContent=d.stats.today;$('total').textContent=d.stats.total;$('visitorCount').textContent=d.stats.visitors;
+$('sites').innerHTML=d.sites.map(s=>{const entry=`${location.origin}/go/${encodeURIComponent(s.slug)}`;return `<tr><td><strong>${esc(s.name)}</strong><br><span class="muted">${esc(s.slug)}</span><br><span class="muted">${esc(s.target_url)}</span></td><td><span class="pill ${s.mode==='protected'?'green':''}">${s.mode==='protected'?'Protegido':'Redirección'}</span></td><td>${s.active?'<span class="pill green">Activo</span>':'<span class="pill red">Desactivado</span>'}</td><td><a href="${esc(entry)}" target="_blank">Abrir enlace</a><br><button class="secondary" style="margin-top:5px" onclick="copyText('${esc(entry)}')">Copiar</button><button class="secondary" style="margin-top:5px;margin-left:5px" onclick="toggleSite('${esc(s.slug)}',${s.active?0:1})">${s.active?'Desactivar':'Activar'}</button></td></tr>`}).join('')||'<tr><td colspan="4">Todavía no hay sitios.</td></tr>';
+$('recent').innerHTML=d.recent.map(x=>`<tr><td>${date(x.accessed_at)}</td><td>${esc(x.visitor_name)}<br><span class="muted">${x.visitor_id?'Identificado con consentimiento':'Anónimo'}</span></td><td>${esc(x.site_name||x.site_slug)}<br><span class="muted">${esc(x.access_mode)}</span></td><td>${esc([x.device_type,x.browser,x.operating_system].filter(Boolean).join(' · ')||'—')}</td><td>${esc([x.city,x.country].filter(Boolean).join(', ')||'—')}</td><td>${date(x.exited_at)}</td></tr>`).join('')||'<tr><td colspan="6">No hay entradas todavía.</td></tr>';
+$('visitors').innerHTML=d.visitors.map(v=>`<tr><td><strong>${esc(v.nickname||'Dispositivo')}</strong><br><span class="muted">${esc(v.visitor_id.slice(0,18))}…</span></td><td>${esc([v.browser,v.operating_system,v.device_type].filter(Boolean).join(' · '))}</td><td>${date(v.last_seen)}</td><td>${v.visits}</td><td>${esc([v.city,v.region,v.country].filter(Boolean).join(', '))}</td><td><button class="secondary" onclick="renameDevice('${v.visitor_id}')">Cambiar nombre</button></td></tr>`).join('')||'<tr><td colspan="6">Todavía no hay dispositivos con consentimiento.</td></tr>';
+}catch(e){$('dashboard').classList.add('hidden');$('login').classList.remove('hidden');$('loginError').textContent=e.message}}
+window.copyText=async text=>{try{await navigator.clipboard.writeText(text);alert('Enlace copiado.')}catch{prompt('Copia este enlace:',text)}};
+window.toggleSite=async(slug,active)=>{try{await api('/api/admin/site-status',{method:'POST',body:JSON.stringify({slug,active:!!active})});load()}catch(e){alert(e.message)}};
+window.renameDevice=async(id)=>{const n=prompt('Nombre interno para este dispositivo:','');if(n===null)return;try{await api('/api/admin/visitor-name',{method:'POST',body:JSON.stringify({visitor_id:id,nickname:n})});load()}catch(e){alert(e.message)}};
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').textContent='';try{await api('/api/admin/login',{method:'POST',body:JSON.stringify({password:$('password').value})});$('password').value='';showDashboard()}catch(err){$('loginError').textContent=err.message}});
+$('logout').addEventListener('click',async()=>{await api('/api/admin/logout',{method:'POST',body:'{}'});$('dashboard').classList.add('hidden');$('login').classList.remove('hidden')});
+$('refresh').addEventListener('click',load);
+$('siteForm').addEventListener('submit',async e=>{e.preventDefault();$('siteMessage').textContent='';try{await api('/api/admin/sites',{method:'POST',body:JSON.stringify({slug:$('slug').value,name:$('name').value,target_url:$('target').value,mode:$('mode').value,active:true})});$('siteMessage').innerHTML='<p class="success">Sitio guardado.</p>';load()}catch(err){$('siteMessage').innerHTML=`<p class="error">${esc(err.message)}</p>`}});
+api('/api/admin/data').then(showDashboard).catch(()=>{});
+</script>
+</body>
+</html>
