@@ -22,7 +22,7 @@ export async function onRequest(context) {
     if (path === "/api/admin/logout" && request.method === "POST") return adminLogout();
     if (path === "/api/admin/data" && request.method === "GET") {
       if (!(await isAdmin(request, env))) return json({ error: "No autorizado" }, 401);
-      return adminData(env);
+      return await adminData(env);
     }
     if (path === "/api/admin/sites" && request.method === "POST") {
       if (!(await isAdmin(request, env))) return json({ error: "No autorizado" }, 401);
