@@ -277,28 +277,50 @@ async function isAdmin(request, env) {
 }
 
 async function adminData(env) {
-  const today = await env.DB.prepare("SELECT COUNT(*) AS n FROM access_logs WHERE date(accessed_at) = date('now')").first();
-  const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM access_logs").first();
-  const unique = await env.DB.prepare("SELECT COUNT(*) AS n FROM visitors").first();
-  const sites = await env.DB.prepare("SELECT * FROM sites ORDER BY name COLLATE NOCASE").all();
-  const recent = await env.DB.prepare(`
-    SELECT l.id, l.site_slug, s.name AS site_name, l.accessed_at, l.exited_at, l.path,
-           l.access_mode, l.outcome, l.visitor_id, COALESCE(v.nickname, substr(l.visitor_id,1,13), 'Anónimo') AS visitor_name,
-           v.browser, v.operating_system, v.device_type, v.country, v.city
-    FROM access_logs l
-    LEFT JOIN visitors v ON v.visitor_id = l.visitor_id
-    LEFT JOIN sites s ON s.id = l.site_id
-    ORDER BY l.accessed_at DESC LIMIT 100
-  `).all();
-  const visitors = await env.DB.prepare(`
-    SELECT visitor_id, nickname, first_seen, last_seen, visits, browser, operating_system,
-           device_type, country, region, city, timezone, language, screen_size
-    FROM visitors ORDER BY last_seen DESC LIMIT 200
-  `).all();
-  return json({
-    stats: { today: today?.n || 0, total: total?.n || 0, visitors: unique?.n || 0 },
-    sites: sites.results || [], recent: recent.results || [], visitors: visitors.results || []
-  });
+  let stage = "inicio";
+  try {
+    stage = "estadísticas de hoy";
+    const today = await env.DB.prepare("SELECT COUNT(*) AS n FROM access_logs WHERE date(accessed_at) = date('now')").first();
+
+    stage = "estadísticas totales";
+    const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM access_logs").first();
+
+    stage = "recuento de visitantes";
+    const unique = await env.DB.prepare("SELECT COUNT(*) AS n FROM visitors").first();
+
+    stage = "lista de sitios";
+    const sites = await env.DB.prepare("SELECT * FROM sites ORDER BY name COLLATE NOCASE").all();
+
+    stage = "visitas recientes";
+    const recent = await env.DB.prepare(`
+      SELECT l.id, l.site_slug, s.name AS site_name, l.accessed_at, l.exited_at, l.path,
+             l.access_mode, l.outcome, l.visitor_id, COALESCE(v.nickname, substr(l.visitor_id,1,13), 'Anónimo') AS visitor_name,
+             v.browser, v.operating_system, v.device_type, v.country, v.city
+      FROM access_logs l
+      LEFT JOIN visitors v ON v.visitor_id = l.visitor_id
+      LEFT JOIN sites s ON s.id = l.site_id
+      ORDER BY l.accessed_at DESC LIMIT 100
+    `).all();
+
+    stage = "lista de visitantes";
+    const visitors = await env.DB.prepare(`
+      SELECT visitor_id, nickname, first_seen, last_seen, visits, browser, operating_system,
+             device_type, country, region, city, timezone, language, screen_size
+      FROM visitors ORDER BY last_seen DESC LIMIT 200
+    `).all();
+
+    return json({
+      stats: { today: today?.n || 0, total: total?.n || 0, visitors: unique?.n || 0 },
+      sites: sites.results || [], recent: recent.results || [], visitors: visitors.results || []
+    });
+  } catch (error) {
+    console.error("Error en adminData, etapa:", stage, error);
+    return json({
+      error: "No se pudieron cargar los datos del administrador.",
+      stage,
+      detail: String(error?.message || error)
+    }, 500);
+  }
 }
 
 async function saveSite(request, env) {
