@@ -18,6 +18,25 @@ export async function onRequest(context) {
       return json({ ok: true, service: "Control de accesos", database: true });
     }
 
+    if (path === "/api/admin/session-check" && request.method === "GET") {
+      const token = parseCookies(request.headers.get("cookie") || "")[ADMIN_COOKIE] || "";
+      const [expiresText, signature] = token.split(".");
+      const expires = Number(expiresText);
+      const secretConfigured = Boolean(env.ADMIN_SESSION_SECRET);
+      let signatureValid = false;
+      if (secretConfigured && expires && expires >= Math.floor(Date.now() / 1000) && signature) {
+        signatureValid = constantTimeEqual(signature, await hmac(expiresText, env.ADMIN_SESSION_SECRET));
+      }
+      return json({
+        cookiePresent: Boolean(token),
+        secretConfigured,
+        expiryPresent: Boolean(expires),
+        expired: Boolean(expires && expires < Math.floor(Date.now() / 1000)),
+        signaturePresent: Boolean(signature),
+        signatureValid
+      });
+    }
+
     if (path === "/api/admin/login" && request.method === "POST") return adminLogin(request, env);
     if (path === "/api/admin/logout" && request.method === "POST") return adminLogout();
     if (path === "/api/admin/data" && request.method === "GET") {
