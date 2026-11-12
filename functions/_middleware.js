@@ -155,10 +155,15 @@ async function handleProtected(context, env, url) {
     (request.headers.get("accept") || "").includes("text/html") &&
     contentType.includes("text/html");
 
+  const proxyHeaders = new Headers(upstream.headers);
+  proxyHeaders.set("x-ca-proxy-upstream-status", String(upstream.status));
+  proxyHeaders.set("x-ca-proxy-upstream-url", upstream.url || targetUrl.toString());
+  proxyHeaders.set("x-ca-proxy-upstream-type", contentType || "unknown");
+
   let response = new Response(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
-    headers: new Headers(upstream.headers)
+    headers: proxyHeaders
   });
 
   // Las rutas absolutas del sitio original deben permanecer dentro del prefijo protegido.
