@@ -1,12 +1,30 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacidad · Control de accesos</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:820px;margin:40px auto;padding:0 18px;color:#172033}h1{line-height:1.2}button{padding:10px 15px;border:0;border-radius:8px;background:#0c7db1;color:white;font-weight:700;cursor:pointer}.note{padding:14px;background:#eef6fb;border-radius:10px}</style></head>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacidad · Control de accesos</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:820px;margin:40px auto;padding:0 18px;color:#172033}h1{line-height:1.2}button{padding:10px 15px;border:0;border-radius:8px;background:#b42318;color:white;font-weight:700;cursor:pointer}.note{padding:14px;background:#eef6fb;border-radius:10px}</style></head>
 <body><h1>Información sobre privacidad y seguimiento</h1>
 <p>Este sitio utiliza Cloudflare Pages y una base de datos Cloudflare D1 para registrar accesos.</p>
 <h2>Qué se registra</h2><ul><li>Fecha y hora de entrada y, cuando el navegador lo comunica, salida aproximada.</li><li>Sitio y ruta solicitada.</li><li>Si aceptas el seguimiento: un identificador aleatorio del navegador, navegador, sistema operativo, tipo de dispositivo, idioma, zona horaria, tamaño de pantalla y ubicación aproximada facilitada por la conexión.</li><li>La IP original no se guarda. Si aceptas, se puede guardar un HMAC de la IP para distinguir conexiones; no es una anonimización irreversible.</li></ul>
-<h2>Identificación</h2><p>El identificador reconoce ese navegador mientras conserve la cookie. No revela por sí solo el nombre de la persona. Borrar cookies, cambiar de navegador o usar otro dispositivo puede generar un identificador distinto.</p>
+<h2>Identificación</h2><p>El identificador reconoce ese navegador mientras conserve la cookie. No revela por sí solo el nombre real de la persona. Borrar cookies, cambiar de navegador o usar otro dispositivo puede generar un identificador distinto.</p>
 <h2>Cookies</h2><p>Se usa una cookie técnica de sesión para permitir que el navegador cargue los archivos del sitio protegido mientras decides. Es temporal y no se utiliza para reconocerte entre visitas. El panel también utiliza una cookie de sesión para mantener abierta la sesión de administración.</p>
-<h2>Consentimiento</h2><p>Si aceptas, se guardará una cookie propia para recordar el consentimiento y reconocer el navegador durante un máximo de un año. La preferencia se conserva hasta seis meses. Si rechazas, las visitas se registran de forma anónima, sin asociarlas a un dispositivo reconocido.</p>
+<h2>Consentimiento</h2><p>Si aceptas, se crea un identificador aleatorio para reconocer este navegador. Si no aceptas, las visitas se registran de forma anónima, sin asociarlas a un dispositivo reconocido.</p>
 <p class="note"><strong>Responsable del sitio:</strong> el administrador de esta instalación debe completar aquí su identidad, un correo de contacto, la finalidad concreta, la base jurídica, el plazo de conservación y el procedimiento para ejercer los derechos de protección de datos antes de publicarla.</p>
-<h2>Cambiar la decisión</h2><p>Puedes retirar el consentimiento en este navegador. Las visitas futuras dejarán de asociarse al identificador anterior.</p><button id="revoke">Retirar consentimiento en este navegador</button> <a href="/admin/">Volver</a><p id="status" role="status"></p>
-<script>document.getElementById('revoke').addEventListener('click',async()=>{const r=await fetch('/api/consent/revoke',{method:'POST',headers:{'content-type':'application/json'},body:'{}',credentials:'same-origin'});document.getElementById('status').textContent=r.ok?'Consentimiento retirado en este navegador.':'No se pudo cambiar la preferencia.';});</script>
+<h2>Eliminar los datos de este navegador</h2><p>Este botón elimina la ficha del dispositivo y desvincula de ella todas las visitas anteriores. Las visitas se conservan únicamente como registros anónimos para mantener las estadísticas. También se borran las cookies de identificación y consentimiento; no se registra un rechazo. Si vuelves a entrar, podrás elegir de nuevo.</p><button id="revoke">Eliminar mis datos de seguimiento</button> <a href="/admin/">Volver</a><p id="status" role="status" aria-live="polite"></p>
+<script>
+document.getElementById('revoke').addEventListener('click',async()=>{
+ const button=document.getElementById('revoke');
+ const status=document.getElementById('status');
+ button.disabled=true;
+ status.textContent='Eliminando los datos asociados a este navegador…';
+ try{
+  const r=await fetch('/api/consent/revoke',{method:'POST',headers:{'content-type':'application/json'},body:'{}',credentials:'same-origin'});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok||!data.ok) throw new Error(data.error||'No se pudo completar la eliminación.');
+  status.textContent=data.deleted
+   ?'Datos del dispositivo eliminados. Las visitas anteriores se han conservado de forma anónima.'
+   :'No había una ficha de dispositivo asociada a este navegador. Se han borrado las cookies de consentimiento.';
+ }catch(error){
+  status.textContent='Error: '+(error.message||'No se pudieron eliminar los datos.');
+  button.disabled=false;
+ }
+});
+</script>
 </body></html>
