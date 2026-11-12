@@ -51,7 +51,7 @@ public/sitio/vitrasachase/       Archivos del videojuego protegido
 4. Configuración:
    - Production branch: `main`
    - Framework preset: `None`
-   - Build command: `exit 0`
+   - Build command: `cp privacidad.html public/privacidad.html`
    - Build output directory: `public`
    - Root directory: `/` (la raíz del repositorio)
 5. Pulsa **Save and Deploy**.
