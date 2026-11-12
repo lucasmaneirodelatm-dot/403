@@ -20,6 +20,7 @@
 
     <section id="dashboard" class="hidden">
       <header class="top"><div><h1>Control de accesos</h1><div class="muted">Historial centralizado de tus videojuegos y páginas</div></div><div class="rowtools"><a href="/privacidad.html" target="_blank">Aviso de privacidad</a><button id="logout" class="secondary">Cerrar sesión</button></div></header>
+      <p id="dataError" class="error" role="alert"></p>
       <div class="grid">
         <div class="stat"><strong id="today">0</strong><span>Entradas hoy</span></div>
         <div class="stat"><strong id="total">0</strong><span>Entradas registradas</span></div>
@@ -57,13 +58,13 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=s=>s?new Date(s).toLocaleString('es-ES'):'—';
-async function api(path,options={}){const r=await fetch(path,{credentials:'same-origin',headers:{'content-type':'application/json',...(options.headers||{})},...options});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||`Error HTTP ${r.status}`);return d}
+async function api(path,options={}){const r=await fetch(path,{credentials:'same-origin',headers:{'content-type':'application/json',...(options.headers||{})},...options});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error([d.error||`Error HTTP ${r.status}`,d.stage?`Etapa: ${d.stage}`:'',d.detail?`Detalle: ${d.detail}`:''].filter(Boolean).join(' — '));return d}
 function showDashboard(){ $('login').classList.add('hidden');$('dashboard').classList.remove('hidden');load(); }
-async function load(){try{const d=await api('/api/admin/data');$('today').textContent=d.stats.today;$('total').textContent=d.stats.total;$('visitorCount').textContent=d.stats.visitors;
+async function load(){try{const d=await api('/api/admin/data');$('dataError').textContent='';$('today').textContent=d.stats.today;$('total').textContent=d.stats.total;$('visitorCount').textContent=d.stats.visitors;
 $('sites').innerHTML=d.sites.map(s=>{const entry=`${location.origin}/go/${encodeURIComponent(s.slug)}`;return `<tr><td><strong>${esc(s.name)}</strong><br><span class="muted">${esc(s.slug)}</span><br><span class="muted">${esc(s.target_url)}</span></td><td><span class="pill ${s.mode==='protected'?'green':''}">${s.mode==='protected'?'Protegido':'Redirección'}</span></td><td>${s.active?'<span class="pill green">Activo</span>':'<span class="pill red">Desactivado</span>'}</td><td><a href="${esc(entry)}" target="_blank">Abrir enlace</a><br><button class="secondary" style="margin-top:5px" onclick="copyText('${esc(entry)}')">Copiar</button><button class="secondary" style="margin-top:5px;margin-left:5px" onclick="toggleSite('${esc(s.slug)}',${s.active?0:1})">${s.active?'Desactivar':'Activar'}</button></td></tr>`}).join('')||'<tr><td colspan="4">Todavía no hay sitios.</td></tr>';
 $('recent').innerHTML=d.recent.map(x=>`<tr><td>${date(x.accessed_at)}</td><td>${esc(x.visitor_name)}<br><span class="muted">${x.visitor_id?'Identificado con consentimiento':'Anónimo'}</span></td><td>${esc(x.site_name||x.site_slug)}<br><span class="muted">${esc(x.access_mode)}</span></td><td>${esc([x.device_type,x.browser,x.operating_system].filter(Boolean).join(' · ')||'—')}</td><td>${esc([x.city,x.country].filter(Boolean).join(', ')||'—')}</td><td>${date(x.exited_at)}</td></tr>`).join('')||'<tr><td colspan="6">No hay entradas todavía.</td></tr>';
 $('visitors').innerHTML=d.visitors.map(v=>`<tr><td><strong>${esc(v.nickname||'Dispositivo')}</strong><br><span class="muted">${esc(v.visitor_id.slice(0,18))}…</span></td><td>${esc([v.browser,v.operating_system,v.device_type].filter(Boolean).join(' · '))}</td><td>${date(v.last_seen)}</td><td>${v.visits}</td><td>${esc([v.city,v.region,v.country].filter(Boolean).join(', '))}</td><td><button class="secondary" onclick="renameDevice('${v.visitor_id}')">Cambiar nombre</button></td></tr>`).join('')||'<tr><td colspan="6">Todavía no hay dispositivos con consentimiento.</td></tr>';
-}catch(e){$('dashboard').classList.add('hidden');$('login').classList.remove('hidden');$('loginError').textContent=e.message}}
+}catch(e){$('login').classList.add('hidden');$('dashboard').classList.remove('hidden');$('dataError').textContent='No se pudieron cargar los datos: '+e.message}}
 window.copyText=async text=>{try{await navigator.clipboard.writeText(text);alert('Enlace copiado.')}catch{prompt('Copia este enlace:',text)}};
 window.toggleSite=async(slug,active)=>{try{await api('/api/admin/site-status',{method:'POST',body:JSON.stringify({slug,active:!!active})});load()}catch(e){alert(e.message)}};
 window.renameDevice=async(id)=>{const n=prompt('Nombre interno para este dispositivo:','');if(n===null)return;try{await api('/api/admin/visitor-name',{method:'POST',body:JSON.stringify({visitor_id:id,nickname:n})});load()}catch(e){alert(e.message)}};
