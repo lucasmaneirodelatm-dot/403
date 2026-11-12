@@ -103,6 +103,7 @@ async function handleProtected(context, env, url) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("Método no permitido", { status: 405 });
   }
+
   const parts = url.pathname.split("/").filter(Boolean);
   const slug = parts[1] || "";
   if (parts.length === 2 && !url.pathname.endsWith("/")) {
@@ -110,49 +111,138 @@ async function handleProtected(context, env, url) {
     return redirect(url, 301);
   }
   if (!slug) return new Response("Falta el identificador del sitio.", { status: 404 });
+
   const site = await env.DB.prepare("SELECT * FROM sites WHERE slug = ? AND active = 1").bind(slug).first();
   if (!site || site.mode !== "protected") return new Response("Sitio protegido no disponible.", { status: 404 });
 
-  const isDocument = request.method === "GET" && (request.headers.get("accept") || "").includes("text/html");
-  const cookies = parseCookies(request.headers.get("cookie") || "");
-  const consent = cookies[CONSENT_COOKIE];
-  let visitorId = consent === "accepted" ? (cookies[VISITOR_COOKIE] || "") : "";
-  const sessionId = cookies[SESSION_COOKIE] || "";
+  // Construye la URL del recurso dentro del sitio original, conservando ruta y parámetros.
+  let base;
+  try {
+    base = new URL(site.target_url);
+  } catch {
+    return new Response("La URL de destino del sitio no es válida.", { status: 502 });
+  }
+  if (!base.pathname.endsWith("/")) base.pathname += "/";
+  const prefix = `/sitio/${encodeURIComponent(site.slug)}`;
+  const suffix = url.pathname.slice(prefix.length).replace(/^\/+/, "");
+  const targetUrl = new URL(suffix || "./", base);
+  targetUrl.search = url.search;
 
-  if (!visitorId && !sessionId && !isDocument) {
-    return new Response("Abre primero la página principal del sitio protegido.", {
-      status: 403,
+  // Solo se reenvían cabeceras públicas necesarias. Nunca se reenvían cookies del panel.
+  const upstreamHeaders = new Headers();
+  for (const name of ["accept", "accept-language", "range", "if-none-match", "if-modified-since"]) {
+    const value = request.headers.get(name);
+    if (value) upstreamHeaders.set(name, value);
+  }
+
+  let upstream;
+  try {
+    upstream = await fetch(targetUrl.toString(), {
+      method: request.method,
+      headers: upstreamHeaders,
+      redirect: "follow"
+    });
+  } catch (error) {
+    console.error("Error al recuperar el sitio protegido:", targetUrl.toString(), error);
+    return new Response("No se pudo conectar con el sitio de destino.", {
+      status: 502,
       headers: { "cache-control": "no-store", "content-type": "text/plain; charset=utf-8" }
     });
   }
 
-  let visitId = "";
+  const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
+  const isDocument = request.method === "GET" &&
+    (request.headers.get("accept") || "").includes("text/html") &&
+    contentType.includes("text/html");
+
+  let response = new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: new Headers(upstream.headers)
+  });
+
+  // Las rutas absolutas del sitio original deben permanecer dentro del prefijo protegido.
   if (isDocument) {
-    visitId = crypto.randomUUID();
-    if (visitorId) {
-      await upsertVisitor(request, env, visitorId, {});
-    }
+    const rewriteUrl = value => {
+      if (!value || !value.startsWith("/") || value.startsWith("//")) return value;
+      if (value.startsWith("/api/") || value.startsWith("/sitio/")) return value;
+      return prefix + value;
+    };
+
+    const visitId = crypto.randomUUID();
+    const cookies = parseCookies(request.headers.get("cookie") || "");
+    const consent = cookies[CONSENT_COOKIE];
+    const visitorId = consent === "accepted" ? (cookies[VISITOR_COOKIE] || "") : "";
+    const sessionId = cookies[SESSION_COOKIE] || "";
+
+    if (visitorId) await upsertVisitor(request, env, visitorId, {});
     await env.DB.prepare(`
       INSERT INTO access_logs (id, visitor_id, site_id, site_slug, accessed_at, path, access_mode, outcome)
-      VALUES (?, ?, ?, ?, ?, ?, 'protected', 'allowed')
-    `).bind(visitId, visitorId || null, site.id, site.slug, nowIso(), safePath(url)).run();
+      VALUES (?, ?, ?, ?, ?, ?, 'protected', ?)
+    `).bind(visitId, visitorId || null, site.id, site.slug, nowIso(), safePath(url), upstream.ok ? "allowed" : "upstream_error").run();
+
+    const script = buildPageScript({
+      visitId,
+      slug: site.slug,
+      showConsent: (!visitorId && consent !== "denied")
+    });
+
+    const proxyHandler = {
+      element(element) {
+        for (const attribute of ["href", "src", "action", "poster"]) {
+          const value = element.getAttribute(attribute);
+          if (value) element.setAttribute(attribute, rewriteUrl(value));
+        }
+      }
+    };
+
+    let rewriter = new HTMLRewriter()
+      .on("a", proxyHandler)
+      .on("link", proxyHandler)
+      .on("script", proxyHandler)
+      .on("img", proxyHandler)
+      .on("source", proxyHandler)
+      .on("iframe", proxyHandler)
+      .on("form", proxyHandler)
+      .on("video", proxyHandler)
+      .on("audio", proxyHandler)
+      .on("object", proxyHandler)
+      .on("embed", proxyHandler)
+      .on("body", {
+        element(element) { element.append(script, { html: true }); }
+      });
+
+    response = rewriter.transform(response);
+    const headers = new Headers(response.headers);
+    headers.set("cache-control", "private, no-store, max-age=0");
+    headers.delete("content-length");
+    headers.delete("content-encoding");
+    if (!visitorId && !sessionId) {
+      headers.append("set-cookie", `${SESSION_COOKIE}=${crypto.randomUUID()}; Path=/; Secure; HttpOnly; SameSite=Lax`);
+    }
+    response = new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    });
+  } else if (contentType.includes("text/css") && request.method === "GET") {
+    // También adapta las imágenes y fuentes referenciadas desde CSS con rutas absolutas.
+    const css = await upstream.text();
+    const encodedSlug = encodeURIComponent(site.slug);
+    const rewrittenCss = css
+      .replace(/url\((\s*["']?)\/(?!\/)/gi, `url($1/sitio/${encodedSlug}/`)
+      .replace(/(@import\s+["'])\/(?!\/)/gi, `$1/sitio/${encodedSlug}/`);
+    const headers = new Headers(upstream.headers);
+    headers.delete("content-length");
+    headers.delete("content-encoding");
+    response = new Response(rewrittenCss, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers
+    });
   }
 
-  const response = await context.next();
-  if (!isDocument || !response.headers.get("content-type")?.toLowerCase().includes("text/html")) return response;
-
-  const script = buildPageScript({ visitId, slug: site.slug, showConsent: (!visitorId && consent !== "denied") });
-  const transformed = new HTMLRewriter()
-    .on("body", { element(element) { element.append(script, { html: true }); } })
-    .transform(response);
-  const headers = new Headers(transformed.headers);
-  headers.set("cache-control", "private, no-store, max-age=0");
-  headers.delete("content-length");
-  headers.delete("content-encoding");
-  if (!visitorId && !sessionId) {
-    headers.append("set-cookie", `${SESSION_COOKIE}=${crypto.randomUUID()}; Path=/; Secure; HttpOnly; SameSite=Lax`);
-  }
-  return new Response(transformed.body, { status: transformed.status, statusText: transformed.statusText, headers });
+  return response;
 }
 
 async function setConsent(request, env) {
