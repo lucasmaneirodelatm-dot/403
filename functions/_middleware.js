@@ -57,7 +57,7 @@ export async function onRequest(context) {
     }
 
     if (path === "/api/consent" && request.method === "POST") return setConsent(request, env);
-    if (path === "/api/consent/revoke" && request.method === "POST") return revokeConsent(request);
+    if (path === "/api/consent/revoke" && request.method === "POST") return revokeConsent(request, env);
     if (path === "/api/leave" && request.method === "POST") return markLeave(request, env);
 
     if (path === "/go" || path.startsWith("/go/")) return handleGo(request, env, url);
@@ -280,12 +280,27 @@ async function setConsent(request, env) {
   return json({ ok: true, accepted: true }, 200, headers);
 }
 
-async function revokeConsent(request) {
+async function revokeConsent(request, env) {
   if (!sameOrigin(request)) return json({ error: "Origen no válido" }, 403);
+  const cookies = parseCookies(request.headers.get("cookie") || "");
+  const visitorId = cookies[VISITOR_COOKIE] || "";
+  if (visitorId && !/^[0-9a-f-]{36}$/i.test(visitorId)) {
+    return json({ error: "Identificador de navegador no válido" }, 400);
+  }
+
+  // Conserva las visitas, pero elimina su vínculo con el dispositivo y borra su ficha.
+  if (visitorId) {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE access_logs SET visitor_id = NULL WHERE visitor_id = ?").bind(visitorId),
+      env.DB.prepare("DELETE FROM visitors WHERE visitor_id = ?").bind(visitorId)
+    ]);
+  }
+
+  // No se guarda un rechazo: se borran ambas preferencias para que pueda decidir otra vez.
   const headers = new Headers({ "cache-control": "no-store" });
-  headers.append("set-cookie", `${CONSENT_COOKIE}=denied; Max-Age=${CONSENT_MAX_AGE}; Path=/; Secure; HttpOnly; SameSite=Lax`);
+  headers.append("set-cookie", `${CONSENT_COOKIE}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`);
   headers.append("set-cookie", `${VISITOR_COOKIE}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`);
-  return json({ ok: true }, 200, headers);
+  return json({ ok: true, deleted: Boolean(visitorId), anonymizedVisits: true }, 200, headers);
 }
 
 async function markLeave(request, env) {
